@@ -1,0 +1,66 @@
+name: Portfolio · GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "portfolio/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate static showcase
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Validate required files and internal references
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s portfolio/index.html
+          test -s portfolio/styles.css
+          test -s portfolio/app.js
+          test -s portfolio/assets/favicon.svg
+          node --check portfolio/app.js
+          grep -q 'styles.css' portfolio/index.html
+          grep -q 'app.js' portfolio/index.html
+          grep -q 'assets/favicon.svg' portfolio/index.html
+          if grep -RInE '(src|href)="/' portfolio --include='*.html'; then
+            echo "Root-relative asset detected. Use paths relative to the repository Pages base path."
+            exit 1
+          fi
+
+  deploy:
+    name: Deploy portfolio
+    needs: validate
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload static site
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: portfolio
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

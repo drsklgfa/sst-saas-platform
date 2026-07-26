@@ -1,0 +1,1271 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum MembershipRole {
+  OWNER
+  ADMIN
+  RESPONSIBLE_TECH
+  CONSULTANT
+  ASSISTANT
+  REVIEWER
+  COMMERCIAL
+  FINANCE
+  READER
+}
+
+enum CompanyUserRole {
+  RH_ADMIN
+  SST
+  MANAGER
+  ACTION_OWNER
+  DIRECTOR
+  READER
+  AUDITOR
+}
+
+enum CompanyStatus {
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+}
+
+enum CampaignStatus {
+  DRAFT
+  SCHEDULED
+  ACTIVE
+  PAUSED
+  CLOSED
+  REOPENED
+  ARCHIVED
+  CANCELLED
+}
+
+enum QuestionType {
+  YES_NO
+  SINGLE_CHOICE
+  MULTI_CHOICE
+  LIKERT
+  NUMBER
+  TEXT
+  LONG_TEXT
+  DATE
+  BODY_MAP
+  MATRIX
+  FILE
+}
+
+enum ResponseStatus {
+  STARTED
+  SUBMITTED
+  INVALIDATED
+}
+
+enum InspectionStatus {
+  DRAFT
+  IN_PROGRESS
+  COMPLETED
+  REVIEWED
+}
+
+enum RiskLevel {
+  VERY_LOW
+  LOW
+  MODERATE
+  HIGH
+  CRITICAL
+}
+
+enum InspectionEvidenceKind {
+  PHOTO
+  DOCUMENT
+  MEASUREMENT
+  OTHER
+}
+
+enum ActionStatus {
+  DRAFT
+  PENDING_APPROVAL
+  NOT_STARTED
+  IN_PROGRESS
+  WAITING_EVIDENCE
+  WAITING_VALIDATION
+  COMPLETED
+  PARTIAL
+  REJECTED
+  CANCELLED
+  OVERDUE
+  EFFECTIVENESS_VERIFIED
+}
+
+enum DocumentStatus {
+  DRAFT
+  REVIEW
+  PREVIEW
+  WAITING_DOCUMENTS
+  WAITING_SIGNATURE
+  ISSUED_UNSIGNED
+  ISSUED_SIGNED
+  REPLACED
+  CANCELLED
+  ARCHIVED
+}
+
+enum SignatureMethod {
+  INTERNAL
+  EXTERNAL_UPLOAD
+  PROVIDER
+  CERTIFICATE
+  NONE
+}
+
+enum ConversationStatus {
+  NEW
+  IN_PROGRESS
+  WAITING_COMPANY
+  WAITING_CONSULTANT
+  RESOLVED
+  ARCHIVED
+  REOPENED
+}
+
+enum MessageChannel {
+  PORTAL
+  EMAIL
+  WHATSAPP
+  SYSTEM
+}
+
+enum NotificationType {
+  MESSAGE
+  EVIDENCE
+  REPORT
+  ACTION
+  CAMPAIGN
+  BACKUP
+  ACCESS
+  JOB
+  SYSTEM
+}
+
+enum JobStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+enum FileVisibility {
+  PRIVATE
+  COMPANY
+  PUBLIC_VERIFICATION
+}
+
+enum BackupType {
+  COMPANY_FULL
+  COMPANY_DATA
+  PLATFORM_FULL
+  PLATFORM_DATA
+  DOCUMENTS_ONLY
+}
+
+enum IntegrationProvider {
+  DISABLED
+  SMTP
+  RESEND
+  GEMINI
+  WHATSAPP_CLOUD
+  CUSTOM
+}
+
+enum ServiceStatus {
+  PROPOSAL
+  CONTRACTED
+  IN_PROGRESS
+  WAITING_CLIENT
+  DELIVERED
+  COMPLETED
+  SUSPENDED
+  CANCELLED
+  EXPIRED
+}
+
+enum IncidentSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum IncidentStatus {
+  OPEN
+  INVESTIGATING
+  CONTAINED
+  RESOLVED
+  CLOSED
+}
+
+enum RecoveryTestStatus {
+  QUEUED
+  RUNNING
+  PASSED
+  FAILED
+}
+
+model Tenant {
+  id                String                @id @default(uuid())
+  name              String
+  slug              String                @unique
+  logoFileId        String?
+  settings          Json                  @default("{}")
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+  memberships       Membership[]
+  companies         Company[]
+  questionnaires    Questionnaire[]
+  methodologies     Methodology[]
+  documentTypes     DocumentType[]
+  documentTemplates DocumentTemplate[]
+  conversations     Conversation[]
+  comments          EntityComment[]
+  files             FileObject[]
+  jobs              Job[]
+  auditLogs         AuditLog[]
+  integrations      IntegrationConfig[]
+  backups           BackupExport[]
+  securityPolicy    TenantSecurityPolicy?
+  securityIncidents SecurityIncident[]
+  recoveryTests     RecoveryTest[]
+}
+
+model User {
+  id                       String                    @id @default(uuid())
+  name                     String
+  email                    String                    @unique
+  passwordHash             String?
+  active                   Boolean                   @default(true)
+  lastLoginAt              DateTime?
+  createdAt                DateTime                  @default(now())
+  updatedAt                DateTime                  @updatedAt
+  memberships              Membership[]
+  companyAccesses          CompanyAccess[]
+  sessions                 Session[]
+  notifications            Notification[]
+  messages                 Message[]
+  conversationParticipants ConversationParticipant[]
+  comments                 EntityComment[]
+  invites                  UserInvite[]
+  ownedSecurityIncidents   SecurityIncident[]        @relation("IncidentOwner")
+  createdRecoveryTests     RecoveryTest[]            @relation("RecoveryTestCreator")
+}
+
+model Membership {
+  id          String         @id @default(uuid())
+  tenantId    String
+  userId      String
+  role        MembershipRole
+  permissions Json           @default("[]")
+  active      Boolean        @default(true)
+  createdAt   DateTime       @default(now())
+  tenant      Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([tenantId, userId])
+  @@index([tenantId, role])
+}
+
+model UserInvite {
+  id          String    @id @default(uuid())
+  userId      String
+  companyId   String?
+  tokenHash   String    @unique
+  expiresAt   DateTime
+  usedAt      DateTime?
+  createdById String?
+  createdAt   DateTime  @default(now())
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company     Company?  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  @@index([userId, expiresAt])
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  ipHash    String?
+  userAgent String?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId, expiresAt])
+}
+
+model Company {
+  id             String            @id @default(uuid())
+  tenantId       String
+  legalName      String
+  tradeName      String?
+  cnpj           String?
+  primaryCnae    String?
+  riskGrade      Int?
+  employeeCount  Int               @default(0)
+  managerName    String?
+  logoFileId     String?
+  status         CompanyStatus     @default(ACTIVE)
+  settings       Json              @default("{}")
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  tenant         Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contacts       CompanyContact[]
+  establishments Establishment[]
+  accesses       CompanyAccess[]
+  campaigns      Campaign[]
+  inspections    Inspection[]
+  risks          Risk[]
+  actionPlans    ActionPlan[]
+  documents      Document[]
+  conversations  Conversation[]
+  comments       EntityComment[]
+  files          FileObject[]
+  backups        BackupExport[]
+  invites        UserInvite[]
+  services       ServiceContract[]
+  @@index([tenantId, status])
+  @@unique([tenantId, cnpj])
+}
+
+model CompanyContact {
+  id               String   @id @default(uuid())
+  companyId        String
+  name             String
+  role             String?
+  email            String?
+  phoneDisplay     String?
+  phoneE164        String?
+  hasWhatsapp      Boolean  @default(false)
+  preferredChannel String?
+  isPrimary        Boolean  @default(false)
+  active           Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  company          Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  @@index([companyId, isPrimary])
+}
+
+model CompanyAccess {
+  id          String          @id @default(uuid())
+  companyId   String
+  userId      String
+  role        CompanyUserRole
+  permissions Json            @default("[]")
+  active      Boolean         @default(true)
+  createdAt   DateTime        @default(now())
+  company     Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user        User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([companyId, userId])
+}
+
+model Establishment {
+  id            String   @id @default(uuid())
+  companyId     String
+  name          String
+  cnpj          String?
+  addressLine   String?
+  number        String?
+  district      String?
+  city          String?
+  state         String?
+  zipCode       String?
+  employeeCount Int      @default(0)
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  company       Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  sectors       Sector[]
+  @@index([companyId])
+}
+
+model Sector {
+  id              String        @id @default(uuid())
+  establishmentId String
+  name            String
+  description     String?
+  employeeCount   Int           @default(0)
+  active          Boolean       @default(true)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  establishment   Establishment @relation(fields: [establishmentId], references: [id], onDelete: Cascade)
+  ghes            GHE[]
+  @@index([establishmentId])
+}
+
+model GHE {
+  id               String            @id @default(uuid())
+  sectorId         String
+  code             String?
+  name             String
+  description      String?
+  employeeCount    Int               @default(0)
+  shift            String?
+  workday          String?
+  metadata         Json              @default("{}")
+  active           Boolean           @default(true)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  sector           Sector            @relation(fields: [sectorId], references: [id], onDelete: Cascade)
+  functions        JobFunction[]
+  workstations     Workstation[]
+  targets          CampaignTarget[]
+  responseSessions ResponseSession[]
+  inspections      Inspection[]
+  risks            Risk[]
+  @@index([sectorId])
+}
+
+model JobFunction {
+  id            String   @id @default(uuid())
+  gheId         String
+  name          String
+  cbo           String?
+  description   String?
+  employeeCount Int      @default(0)
+  activities    Json     @default("[]")
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  ghe           GHE      @relation(fields: [gheId], references: [id], onDelete: Cascade)
+  @@index([gheId])
+}
+
+model Workstation {
+  id          String   @id @default(uuid())
+  gheId       String
+  name        String
+  description String?
+  metadata    Json     @default("{}")
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  ghe         GHE      @relation(fields: [gheId], references: [id], onDelete: Cascade)
+}
+
+model ServiceContract {
+  id                String        @id @default(uuid())
+  companyId         String
+  code              String
+  name              String
+  category          String?
+  description       String?
+  status            ServiceStatus @default(PROPOSAL)
+  contractedValue   Decimal?      @db.Decimal(14, 2)
+  contractedAt      DateTime?
+  startsAt          DateTime?
+  dueAt             DateTime?
+  deliveredAt       DateTime?
+  renewalAt         DateTime?
+  renewalNoticeDays Int           @default(30)
+  responsibleName   String?
+  purchaseOrder     String?
+  notes             String?
+  active            Boolean       @default(true)
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  company           Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  @@unique([companyId, code])
+  @@index([companyId, status, dueAt])
+  @@index([companyId, renewalAt])
+}
+
+model Questionnaire {
+  id          String                 @id @default(uuid())
+  tenantId    String
+  name        String
+  category    String
+  description String?
+  active      Boolean                @default(true)
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
+  tenant      Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  versions    QuestionnaireVersion[]
+  @@index([tenantId, category])
+}
+
+model QuestionnaireVersion {
+  id              String                  @id @default(uuid())
+  questionnaireId String
+  version         Int
+  title           String
+  instructions    String?
+  scoringConfig   Json                    @default("{}")
+  publishedAt     DateTime?
+  createdAt       DateTime                @default(now())
+  questionnaire   Questionnaire           @relation(fields: [questionnaireId], references: [id], onDelete: Cascade)
+  questions       Question[]
+  campaignLinks   CampaignQuestionnaire[]
+  @@unique([questionnaireId, version])
+}
+
+model Question {
+  id                     String               @id @default(uuid())
+  questionnaireVersionId String
+  code                   String
+  text                   String
+  helpText               String?
+  type                   QuestionType
+  required               Boolean              @default(true)
+  position               Int
+  dimension              String?
+  reverseScore           Boolean              @default(false)
+  minValue               Float?
+  maxValue               Float?
+  conditions             Json                 @default("[]")
+  metadata               Json                 @default("{}")
+  questionnaireVersion   QuestionnaireVersion @relation(fields: [questionnaireVersionId], references: [id], onDelete: Cascade)
+  options                QuestionOption[]
+  answers                Answer[]
+  @@unique([questionnaireVersionId, code])
+  @@index([questionnaireVersionId, position])
+}
+
+model QuestionOption {
+  id         String   @id @default(uuid())
+  questionId String
+  value      String
+  label      String
+  score      Float?
+  position   Int
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  @@unique([questionId, value])
+}
+
+model Campaign {
+  id                    String                  @id @default(uuid())
+  companyId             String
+  name                  String
+  publicToken           String                  @unique
+  status                CampaignStatus          @default(DRAFT)
+  startsAt              DateTime?
+  endsAt                DateTime?
+  expectedResponses     Int                     @default(0)
+  minimumGroupSize      Int                     @default(5)
+  detailedGroupSize     Int                     @default(10)
+  anonymousCodesEnabled Boolean                 @default(false)
+  settings              Json                    @default("{}")
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
+  company               Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  targets               CampaignTarget[]
+  questionnaires        CampaignQuestionnaire[]
+  codes                 AnonymousCode[]
+  responseSessions      ResponseSession[]
+  @@index([companyId, status])
+}
+
+model CampaignTarget {
+  id                String   @id @default(uuid())
+  campaignId        String
+  gheId             String
+  expectedResponses Int      @default(0)
+  token             String   @unique
+  campaign          Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  ghe               GHE      @relation(fields: [gheId], references: [id], onDelete: Cascade)
+  @@unique([campaignId, gheId])
+}
+
+model CampaignQuestionnaire {
+  id                     String               @id @default(uuid())
+  campaignId             String
+  questionnaireVersionId String
+  position               Int
+  campaign               Campaign             @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  questionnaireVersion   QuestionnaireVersion @relation(fields: [questionnaireVersionId], references: [id], onDelete: Restrict)
+  @@unique([campaignId, questionnaireVersionId])
+}
+
+model AnonymousCode {
+  id         String    @id @default(uuid())
+  campaignId String
+  codeHash   String    @unique
+  usedAt     DateTime?
+  createdAt  DateTime  @default(now())
+  campaign   Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+}
+
+model ResponseSession {
+  id                      String         @id @default(uuid())
+  campaignId              String
+  gheId                   String?
+  status                  ResponseStatus @default(STARTED)
+  anonymousFingerprint    String?
+  startedAt               DateTime       @default(now())
+  submittedAt             DateTime?
+  durationSeconds         Int?
+  qualityFlags            Json           @default("[]")
+  moderation              Json           @default("{}")
+  includedInConsolidation Boolean        @default(true)
+  campaign                Campaign       @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  ghe                     GHE?           @relation(fields: [gheId], references: [id], onDelete: SetNull)
+  answers                 Answer[]
+  bodyPains               BodyPain[]
+  @@index([campaignId, status])
+  @@unique([campaignId, anonymousFingerprint])
+  @@index([gheId])
+}
+
+model Answer {
+  id                String          @id @default(uuid())
+  responseSessionId String
+  questionId        String
+  value             Json
+  numericValue      Float?
+  createdAt         DateTime        @default(now())
+  responseSession   ResponseSession @relation(fields: [responseSessionId], references: [id], onDelete: Cascade)
+  question          Question        @relation(fields: [questionId], references: [id], onDelete: Restrict)
+  @@unique([responseSessionId, questionId])
+}
+
+model BodyPain {
+  id                String          @id @default(uuid())
+  responseSessionId String
+  regionCode        String
+  side              String?
+  intensity         Int
+  frequency         String?
+  notes             String?
+  responseSession   ResponseSession @relation(fields: [responseSessionId], references: [id], onDelete: Cascade)
+  @@index([responseSessionId, regionCode])
+}
+
+model Inspection {
+  id            String               @id @default(uuid())
+  companyId     String
+  gheId         String?
+  title         String
+  status        InspectionStatus     @default(DRAFT)
+  performedAt   DateTime?
+  performedById String?
+  notes         String?
+  metadata      Json                 @default("{}")
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  company       Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  ghe           GHE?                 @relation(fields: [gheId], references: [id], onDelete: SetNull)
+  items         InspectionItem[]
+  calculations  Calculation[]
+  evidences     InspectionEvidence[]
+  risks         Risk[]
+  @@index([companyId, status])
+}
+
+model InspectionItem {
+  id           String     @id @default(uuid())
+  inspectionId String
+  category     String
+  code         String
+  label        String
+  value        Json
+  position     Int
+  inspection   Inspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+  @@unique([inspectionId, code])
+}
+
+model InspectionEvidence {
+  id           String                 @id @default(uuid())
+  inspectionId String
+  fileId       String
+  kind         InspectionEvidenceKind @default(PHOTO)
+  caption      String?
+  position     Int                    @default(0)
+  createdById  String?
+  createdAt    DateTime               @default(now())
+  inspection   Inspection             @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+  file         FileObject             @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  @@index([inspectionId, kind, position])
+}
+
+model Methodology {
+  id           String        @id @default(uuid())
+  tenantId     String
+  code         String
+  name         String
+  version      String
+  category     String
+  description  String?
+  config       Json          @default("{}")
+  active       Boolean       @default(true)
+  createdAt    DateTime      @default(now())
+  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  calculations Calculation[]
+  @@unique([tenantId, code, version])
+}
+
+model Calculation {
+  id             String      @id @default(uuid())
+  inspectionId   String?
+  methodologyId  String
+  inputs         Json
+  outputs        Json
+  score          Float?
+  classification String?
+  engineVersion  String
+  performedById  String?
+  createdAt      DateTime    @default(now())
+  inspection     Inspection? @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+  methodology    Methodology @relation(fields: [methodologyId], references: [id], onDelete: Restrict)
+  @@index([inspectionId])
+}
+
+model Risk {
+  id                   String       @id @default(uuid())
+  companyId            String
+  gheId                String?
+  inspectionId         String?
+  code                 String
+  category             String
+  hazard               String
+  source               String?
+  possibleHarm         String?
+  frequency            String?
+  duration             String?
+  methodology          String?
+  legalReferences      Json         @default("[]")
+  controlEffectiveness Int?
+  exposedCount         Int          @default(0)
+  severity             Int
+  probability          Int
+  exposure             Int          @default(1)
+  initialScore         Float
+  initialLevel         RiskLevel
+  residualScore        Float?
+  residualLevel        RiskLevel?
+  existingControls     Json         @default("[]")
+  assessmentBasis      Json         @default("{}")
+  status               String       @default("ACTIVE")
+  lastReviewedAt       DateTime?
+  reviewDueAt          DateTime?
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+  company              Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  ghe                  GHE?         @relation(fields: [gheId], references: [id], onDelete: SetNull)
+  inspection           Inspection?  @relation(fields: [inspectionId], references: [id], onDelete: SetNull)
+  actions              ActionItem[]
+  @@unique([companyId, code])
+  @@index([companyId, initialLevel])
+}
+
+model ActionPlan {
+  id             String       @id @default(uuid())
+  companyId      String
+  name           String
+  year           Int?
+  status         String       @default("ACTIVE")
+  lastReviewedAt DateTime?
+  reviewDueAt    DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  company        Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  items          ActionItem[]
+}
+
+model ActionItem {
+  id                  String           @id @default(uuid())
+  actionPlanId        String
+  riskId              String?
+  code                String
+  action              String
+  responsible         String?
+  verifier            String?
+  dueDate             DateTime?
+  location            String?
+  reason              String?
+  method              String?
+  estimatedCost       Decimal?         @db.Decimal(14, 2)
+  actualCost          Decimal?         @db.Decimal(14, 2)
+  priority            String?
+  status              ActionStatus     @default(NOT_STARTED)
+  progress            Int              @default(0)
+  completedAt         DateTime?
+  verifiedAt          DateTime?
+  effectivenessStatus String?
+  effectivenessNotes  String?
+  residualScore       Float?
+  residualLevel       RiskLevel?
+  delayReason         String?
+  nextReviewAt        DateTime?
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+  actionPlan          ActionPlan       @relation(fields: [actionPlanId], references: [id], onDelete: Cascade)
+  risk                Risk?            @relation(fields: [riskId], references: [id], onDelete: SetNull)
+  evidences           ActionEvidence[]
+  @@unique([actionPlanId, code])
+  @@index([actionPlanId, status, dueDate])
+}
+
+model ActionEvidence {
+  id            String      @id @default(uuid())
+  actionItemId  String
+  fileId        String?
+  description   String?
+  status        String      @default("PENDING")
+  submittedById String?
+  reviewedById  String?
+  reviewedAt    DateTime?
+  reviewNotes   String?
+  createdAt     DateTime    @default(now())
+  actionItem    ActionItem  @relation(fields: [actionItemId], references: [id], onDelete: Cascade)
+  file          FileObject? @relation(fields: [fileId], references: [id], onDelete: SetNull)
+  @@index([actionItemId, status])
+}
+
+model DocumentType {
+  id          String             @id @default(uuid())
+  tenantId    String
+  code        String
+  name        String
+  category    String
+  description String?
+  active      Boolean            @default(true)
+  createdAt   DateTime           @default(now())
+  tenant      Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  templates   DocumentTemplate[]
+  documents   Document[]
+  @@unique([tenantId, code])
+}
+
+model DocumentTemplate {
+  id             String                    @id @default(uuid())
+  tenantId       String
+  documentTypeId String
+  name           String
+  description    String?
+  active         Boolean                   @default(true)
+  createdAt      DateTime                  @default(now())
+  tenant         Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  documentType   DocumentType              @relation(fields: [documentTypeId], references: [id], onDelete: Cascade)
+  versions       DocumentTemplateVersion[]
+}
+
+model DocumentTemplateVersion {
+  id                String           @id @default(uuid())
+  templateId        String
+  version           Int
+  schema            Json
+  styles            Json             @default("{}")
+  variables         Json             @default("[]")
+  regulatoryPackage Json             @default("{}")
+  publishedAt       DateTime?
+  createdAt         DateTime         @default(now())
+  template          DocumentTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  documents         Document[]
+  @@unique([templateId, version])
+}
+
+model Document {
+  id                String                   @id @default(uuid())
+  companyId         String
+  documentTypeId    String
+  templateVersionId String?
+  title             String
+  referenceYear     Int?
+  status            DocumentStatus           @default(DRAFT)
+  currentVersion    Int                      @default(1)
+  releasedVersion   Int?
+  verificationCode  String                   @unique @default(cuid())
+  releasedToCompany Boolean                  @default(false)
+  releasedAt        DateTime?
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
+  company           Company                  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  documentType      DocumentType             @relation(fields: [documentTypeId], references: [id], onDelete: Restrict)
+  templateVersion   DocumentTemplateVersion? @relation(fields: [templateVersionId], references: [id], onDelete: SetNull)
+  versions          DocumentVersion[]
+  files             DocumentFile[]
+  signatures        Signature[]
+  @@index([companyId, status])
+  @@index([companyId, releasedToCompany, releasedAt])
+}
+
+model DocumentVersion {
+  id            String             @id @default(uuid())
+  documentId    String
+  version       Int
+  status        DocumentStatus
+  content       Json
+  warnings      Json               @default("[]")
+  justification String?
+  snapshotId    String?            @unique
+  generatedAt   DateTime?
+  lockedAt      DateTime?
+  issuedAt      DateTime?
+  releasedAt    DateTime?
+  createdById   String?
+  createdAt     DateTime           @default(now())
+  document      Document           @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  snapshot      DocumentSnapshot?  @relation(fields: [snapshotId], references: [id], onDelete: SetNull)
+  sections      DocumentSection[]
+  files         DocumentFile[]
+  signatures    Signature[]
+  auditRuns     DocumentAuditRun[]
+  @@unique([documentId, version])
+  @@index([documentId, status])
+}
+
+model DocumentSnapshot {
+  id        String           @id @default(uuid())
+  data      Json
+  dataHash  String
+  createdAt DateTime         @default(now())
+  version   DocumentVersion?
+}
+
+model DocumentSection {
+  id                String          @id @default(uuid())
+  documentVersionId String
+  code              String
+  title             String
+  position          Int
+  enabled           Boolean         @default(true)
+  content           Json
+  documentVersion   DocumentVersion @relation(fields: [documentVersionId], references: [id], onDelete: Cascade)
+  @@unique([documentVersionId, code])
+}
+
+model DocumentFile {
+  id                String          @id @default(uuid())
+  documentId        String
+  documentVersionId String
+  versionNumber     Int
+  fileObjectId      String
+  format            String
+  official          Boolean         @default(false)
+  snapshotHash      String
+  signatureCount    Int             @default(0)
+  metadata          Json            @default("{}")
+  createdAt         DateTime        @default(now())
+  document          Document        @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  documentVersion   DocumentVersion @relation(fields: [documentVersionId], references: [id], onDelete: Cascade)
+  fileObject        FileObject      @relation(fields: [fileObjectId], references: [id], onDelete: Cascade)
+  @@index([documentId, versionNumber])
+  @@index([documentVersionId, format, official])
+}
+
+model Signature {
+  id                 String          @id @default(uuid())
+  documentId         String
+  documentVersionId  String
+  versionNumber      Int
+  method             SignatureMethod
+  signerName         String
+  signerRegistration String?
+  signatureRole      String          @default("RESPONSIBLE_TECH")
+  signedById         String?
+  signedAt           DateTime?
+  ipHash             String?
+  documentHash       String?
+  metadata           Json            @default("{}")
+  createdAt          DateTime        @default(now())
+  document           Document        @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  documentVersion    DocumentVersion @relation(fields: [documentVersionId], references: [id], onDelete: Cascade)
+  @@index([documentId, versionNumber])
+  @@index([documentVersionId, signedAt])
+}
+
+model DocumentAuditRun {
+  id                String          @id @default(uuid())
+  documentVersionId String
+  status            String
+  results           Json
+  warningCount      Int             @default(0)
+  errorCount        Int             @default(0)
+  createdById       String?
+  createdAt         DateTime        @default(now())
+  documentVersion   DocumentVersion @relation(fields: [documentVersionId], references: [id], onDelete: Cascade)
+  @@index([documentVersionId, createdAt])
+}
+
+model Conversation {
+  id            String                    @id @default(uuid())
+  tenantId      String
+  companyId     String?
+  subject       String
+  category      String?
+  status        ConversationStatus        @default(NEW)
+  priority      String                    @default("NORMAL")
+  relatedType   String?
+  relatedId     String?
+  assignedToId  String?
+  resolvedAt    DateTime?
+  archivedAt    DateTime?
+  lastMessageAt DateTime                  @default(now())
+  createdAt     DateTime                  @default(now())
+  tenant        Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  company       Company?                  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  participants  ConversationParticipant[]
+  messages      Message[]
+  @@index([tenantId, status, lastMessageAt])
+  @@index([companyId])
+}
+
+model ConversationParticipant {
+  id             String       @id @default(uuid())
+  conversationId String
+  userId         String
+  lastReadAt     DateTime?
+  muted          Boolean      @default(false)
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([conversationId, userId])
+}
+
+model Message {
+  id                String              @id @default(uuid())
+  conversationId    String
+  userId            String?
+  channel           MessageChannel      @default(PORTAL)
+  body              String
+  internal          Boolean             @default(false)
+  externalMessageId String?             @unique
+  metadata          Json                @default("{}")
+  createdAt         DateTime            @default(now())
+  conversation      Conversation        @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user              User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
+  attachments       MessageAttachment[]
+  @@index([conversationId, createdAt])
+}
+
+model MessageAttachment {
+  id        String     @id @default(uuid())
+  messageId String
+  fileId    String
+  createdAt DateTime   @default(now())
+  message   Message    @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  file      FileObject @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  @@unique([messageId, fileId])
+  @@index([messageId])
+}
+
+model EntityComment {
+  id          String              @id @default(uuid())
+  tenantId    String
+  companyId   String
+  userId      String?
+  entityType  String
+  entityId    String
+  body        String
+  internal    Boolean             @default(false)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  tenant      Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  company     Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user        User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
+  attachments CommentAttachment[]
+  @@index([companyId, entityType, entityId, createdAt])
+}
+
+model CommentAttachment {
+  id        String        @id @default(uuid())
+  commentId String
+  fileId    String
+  createdAt DateTime      @default(now())
+  comment   EntityComment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  file      FileObject    @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  @@unique([commentId, fileId])
+}
+
+model Notification {
+  id        String           @id @default(uuid())
+  userId    String
+  type      NotificationType
+  title     String
+  body      String?
+  href      String?
+  companyId String?
+  metadata  Json             @default("{}")
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId, readAt, createdAt])
+}
+
+model FileObject {
+  id                  String               @id @default(uuid())
+  tenantId            String
+  companyId           String?
+  storageKey          String               @unique
+  originalName        String
+  mimeType            String
+  sizeBytes           BigInt
+  sha256              String
+  visibility          FileVisibility       @default(PRIVATE)
+  encrypted           Boolean              @default(false)
+  metadata            Json                 @default("{}")
+  createdById         String?
+  createdAt           DateTime             @default(now())
+  tenant              Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  company             Company?             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  inspectionEvidences InspectionEvidence[]
+  actionEvidences     ActionEvidence[]
+  documentFiles       DocumentFile[]
+  messageAttachments  MessageAttachment[]
+  commentAttachments  CommentAttachment[]
+  @@index([tenantId, companyId])
+}
+
+model BackupExport {
+  id            String         @id @default(uuid())
+  tenantId      String
+  companyId     String?
+  type          BackupType
+  status        JobStatus      @default(QUEUED)
+  fileObjectId  String?
+  manifest      Json           @default("{}")
+  encrypted     Boolean        @default(false)
+  expiresAt     DateTime?
+  createdById   String?
+  createdAt     DateTime       @default(now())
+  completedAt   DateTime?
+  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  company       Company?       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  recoveryTests RecoveryTest[]
+  @@index([tenantId, createdAt])
+}
+
+model ImportRun {
+  id          String    @id @default(uuid())
+  tenantId    String
+  sourceName  String
+  status      JobStatus @default(QUEUED)
+  mode        String
+  preview     Json      @default("{}")
+  result      Json      @default("{}")
+  error       String?
+  createdById String?
+  createdAt   DateTime  @default(now())
+  completedAt DateTime?
+  @@index([tenantId, status])
+}
+
+model Job {
+  id          String    @id @default(uuid())
+  tenantId    String
+  type        String
+  status      JobStatus @default(QUEUED)
+  payload     Json
+  attempts    Int       @default(0)
+  maxAttempts Int       @default(3)
+  runAt       DateTime  @default(now())
+  lockedAt    DateTime?
+  lockedBy    String?
+  error       String?
+  result      Json?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  @@index([status, runAt])
+}
+
+model TenantSecurityPolicy {
+  id                          String    @id @default(uuid())
+  tenantId                    String    @unique
+  legalHold                   Boolean   @default(false)
+  auditDeletionEnabled        Boolean   @default(false)
+  auditRetentionDays          Int       @default(3650)
+  notificationRetentionDays   Int       @default(365)
+  jobRetentionDays            Int       @default(90)
+  expiredSessionRetentionDays Int       @default(30)
+  inviteRetentionDays         Int       @default(30)
+  backupReviewDays            Int       @default(7)
+  lastRetentionRunAt          DateTime?
+  createdAt                   DateTime  @default(now())
+  updatedAt                   DateTime  @updatedAt
+  tenant                      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+model SecurityIncident {
+  id          String           @id @default(uuid())
+  tenantId    String
+  title       String
+  description String
+  severity    IncidentSeverity @default(MEDIUM)
+  status      IncidentStatus   @default(OPEN)
+  ownerId     String?
+  detectedAt  DateTime         @default(now())
+  containedAt DateTime?
+  resolvedAt  DateTime?
+  closedAt    DateTime?
+  actions     Json             @default("[]")
+  metadata    Json             @default("{}")
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  tenant      Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  owner       User?            @relation("IncidentOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  @@index([tenantId, status, severity])
+  @@index([tenantId, detectedAt])
+}
+
+model RecoveryTest {
+  id             String             @id @default(uuid())
+  tenantId       String
+  backupExportId String
+  status         RecoveryTestStatus @default(QUEUED)
+  createdById    String?
+  checks         Json               @default("{}")
+  error          String?
+  startedAt      DateTime?
+  completedAt    DateTime?
+  createdAt      DateTime           @default(now())
+  tenant         Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  backupExport   BackupExport       @relation(fields: [backupExportId], references: [id], onDelete: Cascade)
+  createdBy      User?              @relation("RecoveryTestCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  @@index([tenantId, status, createdAt])
+  @@index([backupExportId, createdAt])
+}
+
+model ServiceHeartbeat {
+  id         String   @id @default(uuid())
+  service    String
+  instanceId String
+  status     String   @default("HEALTHY")
+  lastSeenAt DateTime @default(now())
+  metadata   Json     @default("{}")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  @@unique([service, instanceId])
+  @@index([service, lastSeenAt])
+}
+
+model IntegrationConfig {
+  id              String              @id @default(uuid())
+  tenantId        String
+  provider        IntegrationProvider
+  enabled         Boolean             @default(false)
+  configEncrypted String?
+  settings        Json                @default("{}")
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  tenant          Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  @@unique([tenantId, provider])
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  tenantId   String
+  userId     String?
+  companyId  String?
+  action     String
+  entityType String
+  entityId   String?
+  before     Json?
+  after      Json?
+  metadata   Json     @default("{}")
+  createdAt  DateTime @default(now())
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  @@index([tenantId, createdAt])
+  @@index([entityType, entityId])
+}

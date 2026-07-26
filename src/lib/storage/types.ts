@@ -1,0 +1,1 @@
+export interface StorageProvider { put(key:string,data:Buffer,contentType:string):Promise<void>; get(key:string):Promise<Buffer>; delete(key:string):Promise<void>; signedUrl(key:string,expiresSeconds?:number):Promise<string>; exists(key:string):Promise<boolean>; }

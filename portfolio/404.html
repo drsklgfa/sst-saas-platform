@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#071711" />
+  <title>Página não encontrada | Plataforma SST</title>
+  <style>
+    *{box-sizing:border-box}body{min-height:100vh;margin:0;display:grid;place-items:center;padding:24px;color:#effff8;background:#071711;font-family:Inter,system-ui,sans-serif;text-align:center}.card{width:min(540px,100%);padding:48px;border:1px solid #26483a;border-radius:24px;background:#0c241a;box-shadow:0 28px 70px rgba(0,0,0,.3)}.mark{width:64px;height:64px;margin:auto;display:grid;place-items:center;border-radius:18px;color:#071711;background:#2ee6a6;font-size:28px;font-weight:900}h1{margin:24px 0 10px;font-size:38px;letter-spacing:-.04em}p{color:#9eb5ab;line-height:1.7}a{margin-top:18px;padding:14px 20px;display:inline-flex;border-radius:12px;color:#071711;background:#fff;text-decoration:none;font-weight:800}
+  </style>
+</head>
+<body>
+  <main class="card"><div class="mark">✓</div><h1>Página não encontrada</h1><p>O endereço solicitado não faz parte da demonstração da Plataforma SST.</p><a id="home-link" href="./">Voltar para a página inicial</a></main>
+  <script>
+    const parts = location.pathname.split('/').filter(Boolean);
+    const base = parts.length ? `/${parts[0]}/` : '/';
+    document.querySelector('#home-link').href = base;
+  </script>
+</body>
+</html>

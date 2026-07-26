@@ -1,0 +1,5 @@
+import {createCipheriv,createDecipheriv,randomBytes,scryptSync} from 'node:crypto';
+const MAGIC=Buffer.from('SSTBACKUP1');
+export function encryptBackup(data:Buffer,password:string){const salt=randomBytes(16),iv=randomBytes(12),key=scryptSync(password,salt,32);const cipher=createCipheriv('aes-256-gcm',key,iv);const body=Buffer.concat([cipher.update(data),cipher.final()]);const tag=cipher.getAuthTag();return Buffer.concat([MAGIC,salt,iv,tag,body]);}
+export function decryptBackup(data:Buffer,password:string){if(!data.subarray(0,MAGIC.length).equals(MAGIC))throw new Error('Formato criptografado inválido');let o=MAGIC.length;const salt=data.subarray(o,o+=16),iv=data.subarray(o,o+=12),tag=data.subarray(o,o+=16),body=data.subarray(o);const key=scryptSync(password,salt,32);const decipher=createDecipheriv('aes-256-gcm',key,iv);decipher.setAuthTag(tag);return Buffer.concat([decipher.update(body),decipher.final()]);}
+export function isEncryptedBackup(data:Buffer){return data.subarray(0,MAGIC.length).equals(MAGIC)};

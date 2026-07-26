@@ -1,0 +1,10 @@
+{
+  "name": "sst-saas-platform",
+  "version": "1.1.0-checkpoint.9.11",
+  "checkpoint": "9.11",
+  "scope": "canonical-public-redirects",
+  "tests_passed": 104,
+  "production_ready": false,
+  "next_checkpoint": "validar-login-e-homologacao-funcional-na-railway",
+  "description": "Usa APP_URL como origem canônica em login, logout, middleware e redirecionamentos de formulários, evitando URLs internas do contêiner Railway."
+}

@@ -1,0 +1,2 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {calculateNiosh} from '../src/domain/engines/niosh.ts';
+test('NIOSH ideal retorna limite próximo de 23 kg',()=>{const r=calculateNiosh({loadKg:23,horizontalCm:25,originHeightCm:75,verticalTravelCm:25,asymmetryDeg:0,frequencyMultiplier:1,couplingMultiplier:1});assert.ok(r.recommendedLimitKg>22);assert.ok(r.liftingIndex>=1)});

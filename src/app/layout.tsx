@@ -1,0 +1,1 @@
+import './globals.css';export const metadata={title:'Plataforma SST',description:'Gestão de laudos, avaliações e planos de ação de SST'};export default function RootLayout({children}:{children:React.ReactNode}){return <html lang="pt-BR"><body>{children}</body></html>}

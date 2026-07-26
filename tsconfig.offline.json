@@ -1,0 +1,25 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "incremental": false,
+    "plugins": [],
+    "types": [],
+    "typeRoots": [
+      "./types"
+    ],
+    "skipLibCheck": true,
+    "noImplicitAny": false
+  },
+  "include": [
+    "next-env.d.ts",
+    "types/offline-deps.d.ts",
+    "types/offline-prisma.d.ts",
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "prisma/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "tests"
+  ]
+}

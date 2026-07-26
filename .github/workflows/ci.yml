@@ -1,0 +1,210 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: sst_saas
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d sst_saas"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/sst_saas?schema=public
+      APP_URL: http://127.0.0.1:3000
+      AUTH_SECRET: ci-secret-with-at-least-32-characters
+      STORAGE_DRIVER: local
+      LOCAL_STORAGE_PATH: .data/storage
+      FILE_ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      AI_PROVIDER: disabled
+      EMAIL_PROVIDER: disabled
+      SEED_TENANT_NAME: Consultoria CI
+      SEED_TENANT_SLUG: consultoria-ci
+      SEED_ADMIN_NAME: Administrador CI
+      SEED_ADMIN_EMAIL: admin-ci@example.com
+      SEED_ADMIN_PASSWORD: CiPassword@123
+      SEED_DEMO_DATA: "true"
+      NEXT_TELEMETRY_DISABLED: "1"
+
+    steps:
+      - name: 1. Baixar o código
+        uses: actions/checkout@v4
+
+      - name: 2. Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: 3. Configurar npm e instalar dependências
+        run: |
+          npm config set fetch-retries 5
+          npm config set fetch-retry-mintimeout 10000
+          npm config set fetch-retry-maxtimeout 60000
+          npm install --no-audit --no-fund
+
+      - name: 4. Restaurar cache do Next.js
+        uses: actions/cache@v4
+        with:
+          path: .next/cache
+          key: ${{ runner.os }}-next-${{ hashFiles('package.json', 'prisma/schema.prisma', 'src/**/*.[jt]s', 'src/**/*.[jt]sx') }}
+          restore-keys: |
+            ${{ runner.os }}-next-
+
+      - name: 5. Validar fontes, schema e tipagem offline
+        run: |
+          npm run validate:source
+          npm run validate:schema
+          npm run typecheck:offline
+          npm run preflight
+          npm run preflight:seed
+
+      - name: 6. Formatar, validar e gerar Prisma
+        run: |
+          # Usa o formatter oficial da mesma versão instalada no runner.
+          # O segundo comando confirma que o resultado ficou canônico.
+          npx prisma format
+          npx prisma format --check
+          npx prisma validate
+          npx prisma generate
+
+      - name: 7. Criar banco e executar seed
+        run: |
+          npx prisma db push --skip-generate
+          npm run db:seed
+
+      - name: 8. Verificar TypeScript real
+        run: npm run typecheck
+
+      - name: 9. Executar testes
+        run: npm test
+
+      - name: 10. Gerar build de produção
+        run: npm run build
+
+      - name: 11. Construir imagem Docker
+        run: docker build --tag sst-saas-platform:ci .
+
+      - name: 12. Testar Web e Worker na imagem Docker
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          network_name="sst-ci-network"
+          cleanup() {
+            echo "--- Logs Web ---"
+            docker logs sst-web-ci 2>/dev/null || true
+            echo "--- Logs Worker ---"
+            docker logs sst-worker-ci 2>/dev/null || true
+            echo "--- Logs PostgreSQL Docker ---"
+            docker logs sst-postgres-ci 2>/dev/null || true
+            docker rm -f sst-web-ci sst-worker-ci sst-postgres-ci 2>/dev/null || true
+            docker network rm "$network_name" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+
+          docker network create "$network_name"
+          docker run -d --name sst-postgres-ci --network "$network_name" \
+            -e POSTGRES_DB=sst_saas \
+            -e POSTGRES_USER=postgres \
+            -e POSTGRES_PASSWORD=postgres \
+            postgres:16-alpine
+
+          for attempt in $(seq 1 30); do
+            if docker exec sst-postgres-ci pg_isready -U postgres -d sst_saas >/dev/null 2>&1; then
+              echo "PostgreSQL Docker disponível."
+              break
+            fi
+            if [ "$attempt" = 30 ]; then
+              echo "PostgreSQL Docker não ficou disponível."
+              exit 1
+            fi
+            sleep 2
+          done
+
+          docker_database_url="postgresql://postgres:postgres@sst-postgres-ci:5432/sst_saas?schema=public"
+          common_env=(
+            -e DATABASE_URL="$docker_database_url"
+            -e APP_URL="http://127.0.0.1:3000"
+            -e AUTH_SECRET="$AUTH_SECRET"
+            -e STORAGE_DRIVER=local
+            -e LOCAL_STORAGE_PATH=/tmp/sst-storage
+            -e FILE_ENCRYPTION_KEY="$FILE_ENCRYPTION_KEY"
+            -e AI_PROVIDER=disabled
+            -e EMAIL_PROVIDER=disabled
+            -e NEXT_TELEMETRY_DISABLED=1
+          )
+
+          docker run -d --name sst-web-ci --network "$network_name" \
+            -p 3000:3000 \
+            "${common_env[@]}" \
+            -e HOSTNAME=0.0.0.0 \
+            -e PORT=3000 \
+            -e RUN_DB_SCHEMA_SYNC=true \
+            sst-saas-platform:ci node server.js
+
+          for attempt in $(seq 1 60); do
+            if ! docker inspect -f '{{.State.Running}}' sst-web-ci 2>/dev/null | grep -q true; then
+              echo "Contêiner Web encerrou antes de ficar saudável."
+              docker inspect sst-web-ci || true
+              exit 1
+            fi
+
+            response_file="$(mktemp)"
+            http_code="$(curl -sS -o "$response_file" -w '%{http_code}' http://127.0.0.1:3000/api/health || true)"
+            response="$(cat "$response_file")"
+            rm -f "$response_file"
+
+            if [ "$http_code" = "200" ] && [ -n "$response" ] && HEALTH_JSON="$response" node -e "const h=JSON.parse(process.env.HEALTH_JSON); if(h.ok!==true||h.database!=='ok') process.exit(1)"; then
+              echo "Aplicação saudável: $response"
+              break
+            fi
+
+            if [ "$attempt" = 60 ]; then
+              echo "Aplicação não ficou saudável. Último HTTP: $http_code; corpo: $response"
+              exit 1
+            fi
+            sleep 2
+          done
+
+          docker run -d --name sst-worker-ci --network "$network_name" \
+            "${common_env[@]}" \
+            -e RUN_DB_SCHEMA_SYNC=false \
+            sst-saas-platform:ci npm run worker
+
+          for attempt in $(seq 1 45); do
+            if ! docker inspect -f '{{.State.Running}}' sst-worker-ci 2>/dev/null | grep -q true; then
+              echo "Contêiner Worker encerrou antes de publicar heartbeat."
+              docker inspect sst-worker-ci || true
+              exit 1
+            fi
+
+            response="$(curl -fsS http://127.0.0.1:3000/api/health || true)"
+            if [ -n "$response" ] && HEALTH_JSON="$response" node -e "const h=JSON.parse(process.env.HEALTH_JSON); if(h.ok!==true||h.database!=='ok'||h.worker!=='ok') process.exit(1)"; then
+              echo "Worker confirmado pelo heartbeat: $response"
+              exit 0
+            fi
+            sleep 2
+          done
+
+          echo "Worker não publicou heartbeat saudável."
+          exit 1

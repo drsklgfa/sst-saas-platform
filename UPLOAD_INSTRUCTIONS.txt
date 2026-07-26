@@ -1,0 +1,25 @@
+SST SAAS PLATFORM — CORREÇÃO DA GITHUB PAGE
+
+O repositório precisa conter exatamente estes caminhos na branch main:
+.github/workflows/pages.yml
+portfolio/index.html
+portfolio/styles.css
+portfolio/app.js
+index.html
+404.html
+
+MÉTODO RECOMENDADO (Git):
+1. Extraia este ZIP dentro da raiz do clone local do repositório sst-saas-platform.
+2. Confirme a substituição dos arquivos.
+3. Execute:
+   git add .
+   git commit -m "fix: publish SST portfolio on GitHub Pages"
+   git push origin main
+4. GitHub > Settings > Pages > Source: GitHub Actions.
+5. GitHub > Actions > Portfolio · GitHub Pages > Run workflow.
+
+MÉTODO PELO NAVEGADOR:
+1. Envie a pasta portfolio e os arquivos index.html, 404.html e .nojekyll.
+2. Use Add file > Create new file.
+3. No nome do arquivo digite: .github/workflows/pages.yml
+4. Copie o conteúdo do pages.yml deste pacote e confirme o commit.

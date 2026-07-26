@@ -1,0 +1,7 @@
+CHECKPOINT 9 COMPLETO
+
+Este ZIP contém todo o projeto acumulado até a validação reforçada, CI de homologação e smoke test de Web/Worker em Docker.
+
+Preserve este arquivo como backup integral. Não use ainda com empresas reais enquanto o GitHub Actions não estiver totalmente verde e a homologação Railway não for concluída.
+
+Próximo passo: executar este checkpoint no GitHub Actions, corrigir somente eventuais erros reais restantes de dependências/build e realizar o teste de aceitação na Railway.

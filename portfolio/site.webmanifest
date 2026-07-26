@@ -1,0 +1,9 @@
+{
+  "name": "Plataforma SST — Portfolio Showcase",
+  "short_name": "Plataforma SST",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#fbfdfc",
+  "theme_color": "#071711",
+  "icons": [{"src":"assets/favicon.svg","sizes":"any","type":"image/svg+xml"}]
+}
